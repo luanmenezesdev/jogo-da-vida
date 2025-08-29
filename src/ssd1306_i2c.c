@@ -1,6 +1,8 @@
 #include "ssd1306.h"
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include "ssd1306_font.h"
 
 uint8_t ssd1306_buffer[ssd1306_buffer_length];
 
@@ -27,6 +29,55 @@ void ssd1306_send_buffer(uint8_t data[], int len) {
         i2c_write_blocking(SSD1306_I2C_INST, ssd1306_i2c_address, pkt, 1 + n, false);
         sent += n;
     }
+}
+
+// Adquire os pixels para um caractere (de acordo com ssd1306_font.h)
+inline int ssd1306_get_font(uint8_t character)
+{
+  if (character >= 'A' && character <= 'Z') {
+    return character - 'A' + 1;
+  }
+  else if (character >= '0' && character <= '9') {
+    return character - '0' + 27;
+  }
+  else
+    return 0;
+}
+
+// Desenha um único caractere no display
+void ssd1306_draw_char(uint8_t *ssd, int16_t x, int16_t y, uint8_t character) {
+    if (x > ssd1306_width - 8 || y > ssd1306_height - 8) {
+        return;
+    }
+
+    y = y / 8;
+
+    character = toupper(character);
+    int idx = ssd1306_get_font(character);
+    int fb_idx = y * 128 + x;
+
+    for (int i = 0; i < 8; i++) {
+        ssd[fb_idx++] = font[idx * 8 + i];
+    }
+}
+
+// Desenha uma string, chamando a função de desenhar caractere várias vezes
+void ssd1306_draw_string(uint8_t *ssd, int16_t x, int16_t y, char *string) {
+    if (x > ssd1306_width - 8 || y > ssd1306_height - 8) {
+        return;
+    }
+
+    while (*string) {
+        ssd1306_draw_char(ssd, x, y, *string++);
+        x += 8;
+    }
+}
+
+// Comando de configuração com base na estrutura ssd1306_t
+void ssd1306_command(ssd1306_t *ssd, uint8_t command) {
+  ssd->port_buffer[1] = command;
+  i2c_write_blocking(
+	ssd->i2c_port, ssd->address, ssd->port_buffer, 2, false );
 }
 
 // ---------- Address window helper ----------

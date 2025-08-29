@@ -41,6 +41,15 @@ struct render_area {
     int buffer_length;
 };
 
+typedef struct {
+  uint8_t width, height, pages, address;
+  i2c_inst_t * i2c_port;
+  bool external_vcc;
+  uint8_t *ram_buffer;
+  size_t bufsize;
+  uint8_t port_buffer[2];
+} ssd1306_t;
+
 // ---------------- API ----------------
 void ssd1306_init(void);
 void calculate_render_area_buffer_length(struct render_area *area);
@@ -55,5 +64,8 @@ void ssd1306_set_pixel(uint8_t *buf, int x, int y, bool on);
 void ssd1306_clear(uint8_t *buf);
 void ssd1306_draw_points(uint8_t *buf, int points[][2], int n_points);
 void ssd1306_draw_line(uint8_t *buf, int x0, int y0, int x1, int y1, bool on);
+void ssd1306_draw_char(uint8_t *ssd, int16_t x, int16_t y, uint8_t character);
+void ssd1306_draw_string(uint8_t *ssd, int16_t x, int16_t y, char *string);
+void ssd1306_command(ssd1306_t *ssd, uint8_t command);
 
 #endif // SSD1306_H
