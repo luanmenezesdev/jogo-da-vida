@@ -59,6 +59,7 @@ target_include_directories(jogo-da-vida PRIVATE
 # Add any user requested libraries
 target_link_libraries(jogo-da-vida 
         hardware_i2c
+        hardware_adc
 )
 
 pico_add_extra_outputs(jogo-da-vida)
