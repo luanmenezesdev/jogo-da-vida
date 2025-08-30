@@ -45,7 +45,7 @@ pico_set_program_version(jogo-da-vida "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(jogo-da-vida 0)
-pico_enable_stdio_usb(jogo-da-vida 0)
+pico_enable_stdio_usb(jogo-da-vida 1)
 
 # Add the standard library to the build
 target_link_libraries(jogo-da-vida
@@ -58,6 +58,9 @@ target_include_directories(jogo-da-vida PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(jogo-da-vida 
+        pico_stdlib
+        pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_mqtt
         hardware_i2c
         hardware_adc
 )
