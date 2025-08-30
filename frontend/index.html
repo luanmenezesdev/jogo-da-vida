@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pico OLED Pixel Art</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Pico OLED Pixel Art</h1>
+
+    <div id="grid-container">
+      <div id="row-labels"></div>
+      <div id="col-labels"></div>
+      <div id="oled"></div>
+    </div>
+
+    <div class="controls">
+      <button id="clearBtn">Limpar Grid</button>
+      <button id="sendBtn">Enviar para Pico</button>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

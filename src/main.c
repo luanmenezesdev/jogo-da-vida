@@ -291,46 +291,23 @@ void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t total_length)
 // -------- Processar dados recebidos --------
 void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
 {
-    static char incoming_message[256];
-    static int incoming_message_len = 0;
+    char incoming_message[256]; // buffer pequeno
+    if (len >= sizeof(incoming_message)) len = sizeof(incoming_message) - 1;
 
-    if (incoming_message_len + len >= sizeof(incoming_message))
-    {
-        printf("⚠️ Message buffer overflow\n");
-        incoming_message_len = 0;
-        return;
-    }
+    memcpy(incoming_message, data, len);
+    incoming_message[len] = '\0';
 
-    memcpy(incoming_message + incoming_message_len, data, len);
-    incoming_message_len += len;
-
-    if (flags & MQTT_DATA_FLAG_LAST)
-    {
-        incoming_message[incoming_message_len] = '\0';
-        printf("📥 Complete message: %s\n", incoming_message);
-
-        // Ignora mensagens publicadas por este Pico
-        if (strncmp(incoming_message, "pico: ", 6) != 0)
-        {
-            // 🔎 Espera JSON tipo [[x,y],[x,y],...]
-            // Ativa as células recebidas
-            int x, y;
-            char *ptr = incoming_message;
-            while ((ptr = strchr(ptr, '[')) != NULL)
-            {
-                if (sscanf(ptr, "[%d,%d]", &x, &y) == 2)
-                {
-                    if (x >= 0 && x < LIFE_GRID_WIDTH &&
-                        y >= 0 && y < LIFE_GRID_HEIGHT)
-                    {
-                        life_grid[x][y] = true;
-                    }
-                }
-                ptr++;
+    // processa cada chunk
+    int x, y;
+    char *ptr = incoming_message;
+    while ((ptr = strchr(ptr, '[')) != NULL) {
+        if (sscanf(ptr, "[%d,%d]", &x, &y) == 2) {
+            if (x >= 0 && x < LIFE_GRID_WIDTH &&
+                y >= 0 && y < LIFE_GRID_HEIGHT) {
+                life_grid[x][y] = true;
             }
         }
-
-        incoming_message_len = 0;
+        ptr++;
     }
 }
 
