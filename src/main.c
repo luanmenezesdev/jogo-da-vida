@@ -34,6 +34,7 @@
 #define WIFI_PASSWORD "mmy6opmr"
 #define MQTT_BROKER "52.57.135.186"
 #define MQTT_TOPIC "pico/life"
+#define MQTT_BUFFER_SIZE 100000
 
 // ---------- Variáveis globais ----------
 
@@ -65,6 +66,9 @@ static const struct mqtt_connect_client_info_t mqtt_client_info = {
     .client_id = "PicoLife",
     .keep_alive = 60,
 };
+// Buffer MQTT
+static char mqtt_buffer[MQTT_BUFFER_SIZE];
+static size_t mqtt_buffer_len = 0;
 
 void gpio_callback(uint gpio, uint32_t events)
 {
@@ -291,23 +295,42 @@ void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t total_length)
 // -------- Processar dados recebidos --------
 void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
 {
-    char incoming_message[256]; // buffer pequeno
-    if (len >= sizeof(incoming_message)) len = sizeof(incoming_message) - 1;
+    // Acumula no buffer global
+    if (mqtt_buffer_len + len < MQTT_BUFFER_SIZE)
+    {
+        memcpy(mqtt_buffer + mqtt_buffer_len, data, len);
+        mqtt_buffer_len += len;
+    }
 
-    memcpy(incoming_message, data, len);
-    incoming_message[len] = '\0';
+    // Só processa quando for o último fragmento
+    if (flags & MQTT_DATA_FLAG_LAST)
+    {
+        mqtt_buffer[mqtt_buffer_len] = '\0';
 
-    // processa cada chunk
-    int x, y;
-    char *ptr = incoming_message;
-    while ((ptr = strchr(ptr, '[')) != NULL) {
-        if (sscanf(ptr, "[%d,%d]", &x, &y) == 2) {
-            if (x >= 0 && x < LIFE_GRID_WIDTH &&
-                y >= 0 && y < LIFE_GRID_HEIGHT) {
-                life_grid[x][y] = true;
+        // Zera a grade antes de aplicar os novos dados
+        memset(life_grid, 0, sizeof(life_grid));
+
+        int x, y;
+        char *ptr = mqtt_buffer;
+        while ((ptr = strchr(ptr, '[')) != NULL)
+        {
+            if (sscanf(ptr, "[%d,%d]", &x, &y) == 2)
+            {
+                if (x >= 0 && x < LIFE_GRID_WIDTH &&
+                    y >= 0 && y < LIFE_GRID_HEIGHT)
+                {
+                    life_grid[x][y] = true;
+                }
             }
+            char *end = strchr(ptr, ']');
+            if (end)
+                ptr = end + 1;
+            else
+                break;
         }
-        ptr++;
+
+        // pronto pra próxima mensagem
+        mqtt_buffer_len = 0;
     }
 }
 
