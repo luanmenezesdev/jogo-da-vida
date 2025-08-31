@@ -34,7 +34,7 @@
 #define WIFI_PASSWORD "mmy6opmr"
 #define MQTT_BROKER "52.57.135.186"
 #define MQTT_TOPIC "pico/life"
-#define MQTT_BUFFER_SIZE 100000
+#define REST_BUFFER_SIZE 64
 
 // ---------- Variáveis globais ----------
 
@@ -67,8 +67,8 @@ static const struct mqtt_connect_client_info_t mqtt_client_info = {
     .keep_alive = 60,
 };
 // Buffer MQTT
-static char mqtt_buffer[MQTT_BUFFER_SIZE];
-static size_t mqtt_buffer_len = 0;
+static char rest_buffer[REST_BUFFER_SIZE];
+static int rest_len = 0;
 
 void gpio_callback(uint gpio, uint32_t events)
 {
@@ -295,42 +295,80 @@ void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t total_length)
 // -------- Processar dados recebidos --------
 void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
 {
-    // Acumula no buffer global
-    if (mqtt_buffer_len + len < MQTT_BUFFER_SIZE)
+    // Buffer temporário para concatenar resto + novo chunk
+    static char chunk_buffer[REST_BUFFER_SIZE + 512]; // ajusta 512 p/ maior chunk esperado
+    int total_len = 0;
+
+    // Copia o resto não processado do chunk anterior
+    if (rest_len > 0)
     {
-        memcpy(mqtt_buffer + mqtt_buffer_len, data, len);
-        mqtt_buffer_len += len;
+        memcpy(chunk_buffer, rest_buffer, rest_len);
+        total_len = rest_len;
+        rest_len = 0;
     }
 
-    // Só processa quando for o último fragmento
-    if (flags & MQTT_DATA_FLAG_LAST)
+    // Adiciona o novo chunk
+    if (len + total_len < sizeof(chunk_buffer))
     {
-        mqtt_buffer[mqtt_buffer_len] = '\0';
+        memcpy(chunk_buffer + total_len, data, len);
+        total_len += len;
+        chunk_buffer[total_len] = '\0';
+    }
+    else
+    {
+        // Se chunk maior que buffer (raro), descarta para evitar overflow
+        printf("Chunk grande demais, descartado!\n");
+        return;
+    }
 
-        // Zera a grade antes de aplicar os novos dados
-        memset(life_grid, 0, sizeof(life_grid));
+    // ---- Processa coordenadas completas ----
+    char *ptr = chunk_buffer;
+    while (1)
+    {
+        char *open = strchr(ptr, '[');
+        if (!open)
+            break;
 
-        int x, y;
-        char *ptr = mqtt_buffer;
-        while ((ptr = strchr(ptr, '[')) != NULL)
+        char *close = strchr(open, ']');
+        if (!close)
         {
-            if (sscanf(ptr, "[%d,%d]", &x, &y) == 2)
+            // Faltou fechar, salva no resto para próximo chunk
+            int remaining = strlen(open);
+            if (remaining < REST_BUFFER_SIZE)
             {
-                if (x >= 0 && x < LIFE_GRID_WIDTH &&
-                    y >= 0 && y < LIFE_GRID_HEIGHT)
-                {
-                    life_grid[x][y] = true;
-                }
+                memcpy(rest_buffer, open, remaining);
+                rest_len = remaining;
             }
-            char *end = strchr(ptr, ']');
-            if (end)
-                ptr = end + 1;
             else
-                break;
+            {
+                printf("Resto grande demais, descartado!\n");
+                rest_len = 0;
+            }
+            break;
         }
 
-        // pronto pra próxima mensagem
-        mqtt_buffer_len = 0;
+        // Temos "[x,y]" completo
+        int x, y;
+        if (sscanf(open, "[%d,%d]", &x, &y) == 2)
+        {
+            if (x >= 0 && x < LIFE_GRID_WIDTH &&
+                y >= 0 && y < LIFE_GRID_HEIGHT)
+            {
+                life_grid[x][y] = true;
+
+                // Aqui pode chamar função para renderizar pixel direto:
+                ssd1306_set_pixel(ssd, x, y, true);
+            }
+        }
+
+        // Continua a partir do próximo caractere após o ']'
+        ptr = close + 1;
+    }
+
+    // Quando for o último fragmento da mensagem, podemos limpar o resto
+    if (flags & MQTT_DATA_FLAG_LAST)
+    {
+        rest_len = 0;
     }
 }
 
